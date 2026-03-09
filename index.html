@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI文明シミュレーション（技術ツリー + 擬似3D + リプレイ）</title>
+  <style>
+    :root{
+      --bg:#0b0f16; --panel:#111827; --panel2:#0f172a; --text:#e5e7eb; --muted:#9ca3af;
+      --good:#34d399; --bad:#fb7185; --warn:#fbbf24; --accent:#60a5fa;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", "Yu Gothic", sans-serif;
+      background: radial-gradient(1000px 600px at 30% 10%, rgba(96,165,250,.12), transparent 60%),
+                  radial-gradient(1000px 600px at 80% 30%, rgba(52,211,153,.10), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+    }
+    header{padding:16px 16px 0;display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+    h1{margin:0;font-size:16px;font-weight:900}
+    .sub{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.4}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+    button{
+      cursor:pointer;border:1px solid rgba(255,255,255,.10);background: rgba(255,255,255,.04);
+      color:var(--text);padding:10px 10px;border-radius:12px;font-weight:900;transition:.15s ease;min-height:42px;
+    }
+    button:hover{transform: translateY(-1px); background: rgba(255,255,255,.06)}
+    button:active{transform: translateY(0px)}
+    button.primary{background: rgba(96,165,250,.16);border-color: rgba(96,165,250,.25)}
+    button.danger{background: rgba(251,113,133,.12);border-color: rgba(251,113,133,.25)}
+    button.good{background: rgba(52,211,153,.12);border-color: rgba(52,211,153,.25)}
+    button:disabled{opacity:.55;cursor:not-allowed;transform:none !important}
+
+    .wrap{padding:16px;display:grid;gap:14px;grid-template-columns: 380px 1fr 420px}
+    @media (max-width: 1280px){.wrap{grid-template-columns:1fr}}
+
+    .card{
+      background: linear-gradient(180deg, rgba(17,24,39,.95), rgba(15,23,42,.95));
+      border:1px solid rgba(255,255,255,.06);border-radius:16px;box-shadow: 0 16px 60px rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    .hd{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;gap:10px;background: rgba(255,255,255,.02)}
+    .title{font-weight:900;font-size:12px}
+    .bd{padding:14px}
+    .banner{
+      border-radius:16px;padding:12px 14px;border:1px solid rgba(255,255,255,.08);
+      background: linear-gradient(90deg, rgba(96,165,250,.10), rgba(52,211,153,.08));
+      display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;
+    }
+    .badge{font-weight:900;font-size:13px;padding:6px 10px;border-radius:999px;background: rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);white-space:nowrap}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .stat{padding:10px;border-radius:12px;background: rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+    .k{font-size:11px;color:var(--muted)}
+    .v{margin-top:6px;font-size:15px;font-weight:900}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .kpi{padding:10px;border-radius:14px;background: rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+    .small{font-size:11px;color:var(--muted);line-height:1.4}
+    .meter{height:10px;border-radius:999px;overflow:hidden;background: rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+    .meter > div{height:100%;background: rgba(96,165,250,.55);width:0%;transition: width .2s ease}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+    .canvasWrap{
+      height: 520px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.25);position:relative;
+    }
+    canvas{display:block;width:100%;height:100%}
+    .hudOverlay{
+      position:absolute;left:10px;top:10px;right:10px;
+      display:flex;justify-content:space-between;gap:10px;align-items:flex-start;pointer-events:none;
+    }
+    .hudOverlay .box{
+      padding:10px 10px;border-radius:14px;background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);backdrop-filter: blur(6px);max-width: 65%;
+    }
+    .hudOverlay .box .t{font-weight:900;font-size:12px}
+    .hudOverlay .box .s{margin-top:6px;font-size:11px;color:var(--muted);white-space:pre-wrap}
+
+    .log{height:260px;overflow:auto;padding-right:6px}
+    .entry{padding:10px;border-radius:14px;background: rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);margin-bottom:10px}
+    .entry .top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .when{font-size:11px;color:var(--muted)}
+    .tag{font-size:11px;font-weight:900;padding:4px 8px;border-radius:999px;background: rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+    .tag.good{border-color: rgba(52,211,153,.25); background: rgba(52,211,153,.10)}
+    .tag.bad{border-color: rgba(251,113,133,.25); background: rgba(251,113,133,.10)}
+    .tag.warn{border-color: rgba(251,191,36,.30); background: rgba(251,191,36,.10)}
+    .tag.info{border-color: rgba(96,165,250,.25); background: rgba(96,165,250,.10)}
+    .msg{margin-top:8px;font-size:12px;line-height:1.55;white-space:pre-wrap}
+
+    .techList{display:grid;gap:10px}
+    .tech{padding:10px;border-radius:14px;background: rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+    .tech.unlocked{border-color: rgba(52,211,153,.25); background: rgba(52,211,153,.08)}
+    .tech .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .tech .name{font-weight:900;font-size:12px}
+    .tech .cost{font-weight:900;font-size:11px;color:var(--muted)}
+    .tech .desc{margin-top:6px;font-size:12px;line-height:1.45}
+    .tech .req{margin-top:8px;font-size:11px;color:var(--muted)}
+    .tech .btns{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+    .tech .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background: rgba(255,255,255,.03);color: var(--muted)}
+
+    input[type="number"], input[type="range"]{
+      width:100%;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+      background:rgba(0,0,0,.25);color:var(--text);font-weight:900;
+    }
+    input[type="range"]{padding:0;height:30px;background:transparent;border:none}
+    .replayRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .pillBtn{min-height:40px;padding:10px 12px;border-radius:999px}
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>AI文明シミュレーション（技術ツリー + 擬似3D + リプレイ）</h1>
+    <div class="sub">外部ライブラリ不要。file://直開きでも安定して動く擬似3D（Canvas2D）版です。</div>
+  </div>
+  <div class="toolbar">
+    <button class="danger" id="resetBtn">リセット</button>
+    <button id="exportBtn">セーブ書き出し</button>
+    <button id="importBtn">セーブ読み込み</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- LEFT -->
+  <section class="card">
+    <div class="hd"><div class="title">現在の文明</div><div id="todayChips"></div></div>
+    <div class="bd">
+      <div class="banner">
+        <div>
+          <div class="title" style="font-size:14px" id="bannerTitle">Day 1</div>
+          <div class="small" id="bannerSub">今日の暦：—</div>
+        </div>
+        <div class="badge" id="multiplierBadge">倍率 ×1.00</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">AI数（人口）</div><div class="v" id="aiCount">1</div></div>
+        <div class="stat"><div class="k">研究（累積）</div><div class="v" id="research">0</div></div>
+        <div class="stat"><div class="k">インフラ（都市力）</div><div class="v" id="infra">0</div></div>
+        <div class="stat"><div class="k">資源</div><div class="v" id="resources">10</div></div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="grid2">
+        <div class="kpi">
+          <div class="k">文明レベル</div>
+          <div class="v" id="civLevel">L1：研究所</div>
+          <div class="meter" style="margin-top:8px"><div id="civMeter"></div></div>
+          <div class="small" style="margin-top:6px" id="civNext">次の進化条件：—</div>
+        </div>
+        <div class="kpi">
+          <div class="k">研究ポイント（技術ツリーに使用）</div>
+          <div class="v" id="rpoints">0</div>
+          <div class="small" style="margin-top:6px">研究行動で増え、技術をアンロックできます。</div>
+        </div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="grid2">
+        <div class="kpi">
+          <div class="k">次の一粒万倍日まで</div>
+          <div class="v" id="nextIchiryu">—</div>
+          <div class="small" style="margin-top:6px">万倍日に「増殖/建設/強行」を合わせると爆発。</div>
+        </div>
+        <div class="kpi">
+          <div class="k">ボーナス効果（技術）</div>
+          <div class="v" id="bonusSummary">—</div>
+          <div class="small" style="margin-top:6px">技術の組み合わせでプレイ感が変わります。</div>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="hd" style="border:0;padding:0;margin-bottom:10px;background:transparent">
+        <div class="title">行動</div>
+        <div class="small">※各行動で1日進みます</div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="actResearch">研究（資源2）</button>
+        <button class="primary" id="actGrow">増殖（資源3）</button>
+        <button id="actExplore">探索（資源+）</button>
+        <button id="actBuild">建設（資源5）</button>
+        <button id="actRest">休む（安全）</button>
+        <button class="danger" id="actRisk">強行（大勝ち/大事故）</button>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="small" id="hintBox">—</div>
+
+      <div style="height:12px"></div>
+
+      <div class="hd"><div class="title">設定（バランス調整）</div><div class="small">好みで変更OK</div></div>
+      <div class="bd" style="padding-top:12px">
+        <div class="grid2">
+          <div class="kpi"><div class="k">一粒万倍日 周期</div><div class="v"><input id="cycleIchiryu" type="number" min="4" max="30" value="12"></div></div>
+          <div class="kpi"><div class="k">万倍倍率（基本）</div><div class="v"><input id="baseMult" type="number" min="5" max="20000" value="1000"></div></div>
+        </div>
+        <div style="height:10px"></div>
+        <button id="applySettings">設定を反映</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CENTER -->
+  <section class="card">
+    <div class="hd"><div class="title">惑星ビュー（擬似3D / オフライン）</div></div>
+    <div class="bd">
+      <div class="canvasWrap" id="canvasWrap">
+        <canvas id="planetCanvas"></canvas>
+        <div class="hudOverlay">
+          <div class="box">
+            <div class="t" id="hudTitle">文明史ムービー</div>
+            <div class="s" id="hudSub">通常プレイ中：ドラッグで回転できます。</div>
+          </div>
+          <div class="box" style="max-width:35%; text-align:right">
+            <div class="t" id="hudDay">Day 1</div>
+            <div class="s" id="hudStats">AI 1 / 研究 0 / 都市 0</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+      <div class="hd"><div class="title">ログ</div><div class="small">事件簿</div></div>
+      <div class="bd" style="padding-top:12px"><div class="log" id="log"></div></div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <section class="card">
+    <div class="hd"><div class="title">技術ツリー</div><div class="small">研究ポイントでアンロック</div></div>
+    <div class="bd">
+      <div class="techList" id="techList"></div>
+
+      <div style="height:12px"></div>
+      <div class="hd"><div class="title">リプレイ（文明の歴史ムービー）</div><div class="small">スナップショット再生</div></div>
+      <div class="bd" style="padding-top:12px">
+        <div class="kpi">
+          <div class="k">リプレイ位置</div>
+          <div class="v"><input id="replaySlider" type="range" min="0" max="0" value="0"></div>
+          <div class="small" id="replayMeta">—</div>
+        </div>
+        <div style="height:10px"></div>
+        <div class="replayRow">
+          <button class="pillBtn good" id="replayPlay">▶ 再生</button>
+          <button class="pillBtn" id="replayPause">⏸ 停止</button>
+          <button class="pillBtn" id="replayLive">⏺ LIVE</button>
+          <button class="pillBtn" id="replayClear">履歴削除</button>
+        </div>
+        <div class="small">※各ターン終了時にスナップショットを自動保存。LIVEに戻すと通常プレイに復帰。</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+(() => {
+  // ---------------- utils ----------------
+  const el = (id)=>document.getElementById(id);
+  const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+  const rand = (a,b)=>Math.random()*(b-a)+a;
+  const chance = (p)=>Math.random()<p;
+  const nowStr = ()=>new Date().toLocaleString();
+  const fmt = (n)=>{
+    if(!Number.isFinite(n)) return "—";
+    if(n < 10000) return String(Math.floor(n));
+    const u=[["京",1e16],["兆",1e12],["億",1e8],["万",1e4]];
+    for(const [k,v] of u){
+      if(n>=v) return (n/v).toFixed(n>=v*100?0:2).replace(/\.?0+$/,'')+k;
+    }
+    return String(Math.floor(n));
+  };
+
+  // ---------------- civ levels ----------------
+  const CIV_LEVELS = [
+    { name:"L1：研究所", goal:{ai:50, infra:20, research:20}},
+    { name:"L2：都市AI", goal:{ai:5000, infra:300, research:120}},
+    { name:"L3：国家AI", goal:{ai:5e6, infra:2e4, research:600}},
+    { name:"L4：惑星文明", goal:{ai:2e9, infra:8e5, research:2500}},
+    { name:"L5：恒星文明", goal:{ai:5e12, infra:2e7, research:9000}},
+    { name:"L6：銀河文明", goal:{ai:1e16, infra:3e8, research:30000}},
+    { name:"L7：宇宙文明（勝利）", goal:null},
+  ];
+
+  // ---------------- tech tree ----------------
+  const TECHS = [
+    { id:"self_improve", name:"自己改良AI", cost:15, req:[],
+      desc:"研究効率 +25%。",
+      effects:{ multResearch:1.25, glowBoost:0.12 } },
+    { id:"nanofactory", name:"ナノ工場", cost:30, req:["self_improve"],
+      desc:"建設効率 +35%。都市増殖が加速。",
+      effects:{ multBuild:1.35, cityDensityBoost:0.25, glowBoost:0.06 } },
+    { id:"replicators", name:"自己複製ライン", cost:45, req:["nanofactory"],
+      desc:"増殖効率 +45%。",
+      effects:{ multGrow:1.45, glowBoost:0.08 } },
+    { id:"stellar_harvest", name:"恒星採光（集光網）", cost:60, req:["nanofactory"],
+      desc:"探索効率 +40%。",
+      effects:{ multExplore:1.40 } },
+    { id:"dyson_sphere", name:"ダイソン球（建造）", cost:120, req:["replicators","stellar_harvest"],
+      desc:"万倍倍率をさらに×1.8。惑星の外側にダイソン球が出現。",
+      effects:{ ichiryuAmplify:1.8, unlockDysonVisual:true, glowBoost:0.22 } },
+  ];
+
+  // ---------------- save/load ----------------
+  const SAVE_KEY="AI_CIV_OFFLINE_CANVAS_SAVE_V1";
+  const load=()=>{ try{const s=localStorage.getItem(SAVE_KEY); return s?JSON.parse(s):null;}catch(e){return null;} };
+  const save=(S)=>{ try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){} };
+
+  const stateDefault=()=>({
+    day:1, ai:1, research:0, infra:0, resources:10, civIndex:0,
+    rpoints:0, techUnlocked:{},
+    cycleIchiryu:12, baseMult:1000,
+    offsetTora:3, offsetFuseiju:5, nextTenshaSeed:41,
+    logs:[], history:[]
+  });
+  let S = load() ?? stateDefault();
+
+  // ---------------- calendar ----------------
+  const isIchiryu=(day)=> day % S.cycleIchiryu === 0;
+  const isTora=(day)=> (day + S.offsetTora) % 12 === 0;
+  const isFuseiju=(day)=> (day + S.offsetFuseiju) % 8 === 0;
+  const isTensha=(day)=> day === S.nextTenshaSeed;
+  const advanceTenshaSeed=()=>{ S.nextTenshaSeed = S.day + Math.floor(rand(55,95)); };
+
+  const dayFlags=(day)=>{
+    const f=[];
+    if(isIchiryu(day)) f.push({k:"一粒万倍日", type:"good"});
+    if(isTensha(day)) f.push({k:"天赦日", type:"good"});
+    if(isTora(day)) f.push({k:"寅の日", type:"good"});
+    if(isFuseiju(day)) f.push({k:"不成就日", type:"bad"});
+    return f;
+  };
+
+  function techEffectsFromState(st){
+    const fx={ multResearch:1, multExplore:1, multBuild:1, multGrow:1, ichiryuAmplify:1,
+      unlockDysonVisual:false, cityDensityBoost:0, glowBoost:0 };
+    for(const t of TECHS){
+      if(!st.techUnlocked?.[t.id]) continue;
+      const e=t.effects||{};
+      for(const k of Object.keys(e)){
+        if(typeof e[k]==="number"){
+          if(k.startsWith("mult") || k==="ichiryuAmplify") fx[k]*=e[k];
+          else fx[k]+=e[k];
+        }else if(typeof e[k]==="boolean"){
+          fx[k]=fx[k]||e[k];
+        }
+      }
+    }
+    return fx;
+  }
+  const techEffects=()=>techEffectsFromState(S);
+
+  function multiplierForDay(day){
+    let mult=1;
+    const names=dayFlags(day).map(x=>x.k);
+    const fx=techEffects();
+    if(names.includes("一粒万倍日")) mult*= S.baseMult * fx.ichiryuAmplify;
+    if(names.includes("天赦日")) mult*=10;
+    if(names.includes("寅の日")) mult*=3;
+    if(names.includes("不成就日")) mult*=0.35;
+    return mult;
+  }
+  const nextIchiryuIn=()=>{
+    const mod=S.day % S.cycleIchiryu;
+    return mod===0?0:(S.cycleIchiryu-mod);
+  };
+
+  // ---------------- log/snapshot ----------------
+  function pushLog(kind,msg){
+    S.logs.unshift({t:nowStr(), day:S.day, kind, msg});
+    if(S.logs.length>240) S.logs.pop();
+  }
+  function snapshot(caption){
+    const flags=dayFlags(S.day).map(f=>f.k);
+    const mult=multiplierForDay(S.day);
+    S.history.push({day:S.day, ai:S.ai, research:S.research, infra:S.infra, resources:S.resources, civIndex:S.civIndex,
+      flags, mult, techUnlocked:{...S.techUnlocked}, caption:caption||""});
+    if(S.history.length>800) S.history.shift();
+  }
+  function checkCivProgress(){
+    while(S.civIndex < CIV_LEVELS.length-1){
+      const g=CIV_LEVELS[S.civIndex].goal;
+      if(!g) break;
+      if(!(S.ai>=g.ai && S.infra>=g.infra && S.research>=g.research)) break;
+      S.civIndex++;
+      pushLog("good", `文明進化！ ${CIV_LEVELS[S.civIndex].name} に到達。`);
+    }
+  }
+
+  // ---------------- actions ----------------
+  function act(type){
+    const flags=dayFlags(S.day);
+    const mult=multiplierForDay(S.day);
+    const fx=techEffects();
+    const civEff=1+(S.civIndex*0.08);
+
+    const spend=(amt)=>{
+      if(S.resources<amt){
+        pushLog("warn", `資源不足（必要${amt} / 所持${S.resources}）で弱体化。`);
+        const ratio=S.resources/amt; S.resources=0;
+        return clamp(ratio,0.15,1);
+      }
+      S.resources-=amt; return 1;
+    };
+
+    const cal = flags.length ? `【暦：${flags.map(f=>f.k).join(" / ")}】` : "【暦：通常日】";
+    const mtxt = (mult!==1) ? `（倍率×${mult.toFixed(2)}）` : "";
+
+    if(type==="research"){
+      const r=spend(2);
+      const base=1.6 + Math.log10(1+S.ai)*0.35;
+      const inc=Math.max(1, Math.floor(base*civEff*fx.multResearch*r));
+      S.research+=inc;
+      const rp=Math.max(1, Math.floor(inc*0.35 + Math.log10(1+S.research)*0.25));
+      S.rpoints+=rp;
+      pushLog("info", `${cal}${mtxt} 研究 +${inc} / 研究P +${rp}`);
+      snapshot(`${cal}${mtxt}\n研究 +${inc} / 研究P +${rp}`);
+    } else if(type==="explore"){
+      const gainBase=3 + Math.log10(1+S.research)*2.6;
+      const multSoft=Math.sqrt(Math.max(1,mult));
+      const gain=Math.max(2, Math.floor(gainBase*civEff*fx.multExplore*multSoft));
+      S.resources+=gain;
+      pushLog(flags.some(f=>f.type==="good")?"good":"info", `${cal}${mtxt} 探索：資源 +${gain}`);
+      snapshot(`${cal}${mtxt}\n探索：資源 +${gain}`);
+    } else if(type==="build"){
+      const r=spend(5);
+      const multSoft=Math.pow(Math.max(1,mult),0.80);
+      const base=2 + Math.log10(1+S.ai)*0.7 + Math.log10(1+S.research)*0.8;
+      const inc=Math.max(1, Math.floor(base*civEff*fx.multBuild*multSoft*r));
+      S.infra+=inc;
+      pushLog(flags.some(f=>f.type==="good")?"good":"info", `${cal}${mtxt} 建設：インフラ +${inc}`);
+      snapshot(`${cal}${mtxt}\n建設：インフラ +${inc}`);
+    } else if(type==="grow"){
+      const r=spend(3);
+      const infraCap=1 + Math.log10(1+S.infra)*0.9;
+      const base=1 + Math.log10(1+S.research)*0.5;
+      let inc=Math.floor((base*civEff*fx.multGrow*infraCap) * mult * r);
+      inc+=Math.floor(Math.log10(1+S.ai)*10);
+      inc=Math.max(1,inc);
+      S.ai+=inc;
+      pushLog(flags.some(f=>f.type==="good")?"good":"info", `${cal}${mtxt} 増殖：AI +${fmt(inc)}`);
+      snapshot(`${cal}${mtxt}\n増殖：AI +${fmt(inc)}`);
+    } else if(type==="rest"){
+      const gainR=Math.max(0, Math.floor(1+S.civIndex*0.6));
+      const gainRes=Math.max(1, Math.floor(2+S.civIndex*1.5));
+      S.research+=gainR; S.resources+=gainRes;
+      pushLog("info", `${cal} 休む：研究 +${gainR} / 資源 +${gainRes}`);
+      snapshot(`${cal}\n休む：研究 +${gainR} / 資源 +${gainRes}`);
+    } else if(type==="risk"){
+      const r=spend(4);
+      const accidentP=clamp(0.20 + (isFuseiju(S.day)?0.12:0), 0, 0.60);
+      const win=chance(clamp(0.12 + (isIchiryu(S.day)?0.10:0) + (isTensha(S.day)?0.08:0), 0.10, 0.45));
+      if(win){
+        const multHard=Math.max(1,mult)*(1.5+S.civIndex*0.25);
+        const base=10 + Math.log10(1+S.ai)*8 + Math.log10(1+S.research)*12;
+        const aiInc=Math.floor(base*multHard*r);
+        const infraInc=Math.floor((2+Math.log10(1+S.research)*3)*Math.pow(multHard,0.6)*r);
+        S.ai+=Math.max(1,aiInc); S.infra+=Math.max(1,infraInc);
+        pushLog("good", `${cal}${mtxt} 強行成功！ AI +${fmt(aiInc)} / インフラ +${fmt(infraInc)}`);
+        snapshot(`${cal}${mtxt}\n強行成功！`);
+      }else{
+        if(chance(accidentP)){
+          const lossRes=Math.floor(Math.max(2,S.resources*rand(0.25,0.65)));
+          S.resources=Math.max(0,S.resources-lossRes);
+          pushLog("bad", `${cal}${mtxt} 強行失敗…事故。資源 -${lossRes}`);
+          snapshot(`${cal}${mtxt}\n強行失敗…事故`);
+        }else{
+          const gainRes=Math.floor(4+Math.log10(1+S.research)*4);
+          S.resources+=gainRes;
+          pushLog("warn", `${cal}${mtxt} 強行空振り。でも資源 +${gainRes}`);
+          snapshot(`${cal}${mtxt}\n強行空振り`);
+        }
+      }
+    }
+
+    if(isTensha(S.day)) advanceTenshaSeed();
+    S.day++;
+    checkCivProgress();
+    save(S);
+    render();
+    if(!replay.isActive) window.__applySceneFromState(S);
+  }
+
+  // ---------------- tech ----------------
+  const canUnlock=(t)=>{
+    if(S.techUnlocked[t.id]) return false;
+    if(S.rpoints < t.cost) return false;
+    for(const r of t.req) if(!S.techUnlocked[r]) return false;
+    return true;
+  };
+  function unlockTech(id){
+    const t=TECHS.find(x=>x.id===id);
+    if(!t || !canUnlock(t)) return;
+    S.rpoints -= t.cost;
+    S.techUnlocked[t.id]=true;
+    pushLog("good", `技術解放：${t.name}（研究P -${t.cost}）`);
+    snapshot(`【技術解放】${t.name}\n${t.desc}`);
+    save(S);
+    render();
+    if(!replay.isActive) window.__applySceneFromState(S);
+  }
+
+  // ---------------- DOM wiring ----------------
+  el("actResearch").addEventListener("click", ()=>act("research"));
+  el("actGrow").addEventListener("click", ()=>act("grow"));
+  el("actExplore").addEventListener("click", ()=>act("explore"));
+  el("actBuild").addEventListener("click", ()=>act("build"));
+  el("actRest").addEventListener("click", ()=>act("rest"));
+  el("actRisk").addEventListener("click", ()=>act("risk"));
+
+  el("applySettings").addEventListener("click", ()=>{
+    S.cycleIchiryu = clamp(parseInt(el("cycleIchiryu").value||"12",10),4,30);
+    S.baseMult = clamp(parseInt(el("baseMult").value||"1000",10),5,20000);
+    pushLog("info", `設定反映：周期=${S.cycleIchiryu}日 / 万倍倍率=${S.baseMult}`);
+    snapshot(`【設定反映】周期=${S.cycleIchiryu} / 万倍倍率=${S.baseMult}`);
+    save(S);
+    render();
+    if(!replay.isActive) window.__applySceneFromState(S);
+  });
+
+  el("resetBtn").addEventListener("click", ()=>{
+    if(!confirm("本当にリセットしますか？（セーブと履歴が消えます）")) return;
+    S = stateDefault();
+    save(S);
+    render(true);
+    window.__applySceneFromState(S);
+  });
+
+  el("exportBtn").addEventListener("click", ()=>{
+    const data = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+    navigator.clipboard?.writeText(data).catch(()=>{});
+    prompt("下の文字列をコピーして保存してください（クリップボードにも入ります）", data);
+  });
+
+  el("importBtn").addEventListener("click", ()=>{
+    const data = prompt("セーブ文字列を貼り付けてください");
+    if(!data) return;
+    try{
+      const json = decodeURIComponent(escape(atob(data.trim())));
+      S = JSON.parse(json);
+      save(S);
+      pushLog("info","セーブを読み込みました。");
+      render(true);
+      window.__applySceneFromState(S);
+    }catch(e){
+      alert("読み込みに失敗しました。");
+    }
+  });
+
+  // ---------------- UI render ----------------
+  const kindTag=(k)=>({good:"good",bad:"bad",warn:"warn",info:"info"}[k]||"info");
+
+  function hintText(){
+    const n=nextIchiryuIn();
+    const today=dayFlags(S.day).map(f=>f.k);
+    if(today.includes("不成就日")) return "ヒント：今日は不成就日。増殖/強行は事故りやすい。探索か休むが堅い。";
+    if(today.includes("天赦日") && today.includes("一粒万倍日")) return "ヒント：今日は天赦日×一粒万倍日。増殖→建設→増殖で跳ねます。";
+    if(today.includes("一粒万倍日")) return "ヒント：今日は一粒万倍日。資源があれば増殖が最強。";
+    if(n===1) return "ヒント：明日は万倍日。今日は探索で資源を溜めると伸びます。";
+    if(S.rpoints>=15 && !S.techUnlocked["self_improve"]) return "ヒント：研究Pが溜まった。「自己改良AI」を解放しよう。";
+    if(S.resources<3) return "ヒント：資源が枯渇気味。探索で回復してから。";
+    return "ヒント：技術解放が加速のカギ。万倍日×ダイソン球が核心。";
+  }
+
+  function setLiveHUD(){
+    el("hudTitle").textContent="文明史ムービー";
+    el("hudDay").textContent=`Day ${S.day}`;
+    el("hudStats").textContent=`AI ${fmt(S.ai)} / 研究 ${fmt(S.research)} / 都市 ${fmt(S.infra)}`;
+    el("hudSub").textContent="通常プレイ中：ドラッグで回転できます。";
+  }
+
+  // ★ここが重要：replaySliderは「1回だけ」宣言
+  const replaySlider = el("replaySlider");
+
+  function render(scrollTop=false){
+    if(S.logs.length===0){
+      pushLog("info","ゲーム開始。探索→研究→万倍日に増殖。");
+      snapshot("ゲーム開始。探索→研究→万倍日に増殖。");
+      save(S);
+    }
+
+    el("aiCount").textContent = fmt(S.ai);
+    el("research").textContent = fmt(S.research);
+    el("infra").textContent = fmt(S.infra);
+    el("resources").textContent = fmt(S.resources);
+    el("rpoints").textContent = fmt(S.rpoints);
+
+    const flags=dayFlags(S.day);
+    const names=flags.map(f=>f.k);
+    const mult=multiplierForDay(S.day);
+    el("bannerTitle").textContent = `Day ${S.day}`;
+    el("bannerSub").textContent = names.length ? `今日の暦：${names.join(" / ")}` : "今日の暦：通常日";
+    el("multiplierBadge").textContent = `倍率 ×${mult.toFixed(2)}`;
+    el("todayChips").textContent = names.length ? names.join(" / ") : "通常日";
+
+    const n=nextIchiryuIn();
+    el("nextIchiryu").textContent = (n===0) ? "今日（万倍日）" : `あと ${n} 日`;
+
+    el("civLevel").textContent = CIV_LEVELS[S.civIndex].name;
+    const g=CIV_LEVELS[S.civIndex].goal;
+    if(!g){
+      el("civNext").textContent = "勝利達成。";
+      el("civMeter").style.width="100%";
+    }else{
+      const p=(clamp(S.ai/g.ai,0,1)+clamp(S.infra/g.infra,0,1)+clamp(S.research/g.research,0,1))/3;
+      el("civMeter").style.width = `${Math.floor(p*100)}%`;
+      el("civNext").textContent = `次：AI ${fmt(g.ai)} / インフラ ${fmt(g.infra)} / 研究 ${fmt(g.research)}`;
+    }
+
+    const fx=techEffects();
+    const b=[];
+    if(fx.multResearch!==1) b.push(`研究×${fx.multResearch.toFixed(2)}`);
+    if(fx.multExplore!==1) b.push(`探索×${fx.multExplore.toFixed(2)}`);
+    if(fx.multBuild!==1) b.push(`建設×${fx.multBuild.toFixed(2)}`);
+    if(fx.multGrow!==1) b.push(`増殖×${fx.multGrow.toFixed(2)}`);
+    if(fx.ichiryuAmplify!==1) b.push(`万倍×${fx.ichiryuAmplify.toFixed(2)}`);
+    if(fx.unlockDysonVisual) b.push("ダイソン球:ON");
+    el("bonusSummary").textContent = b.length ? b.join(" / ") : "—";
+
+    el("hintBox").textContent = hintText();
+
+    const logEl=el("log");
+    logEl.innerHTML="";
+    for(const l of S.logs.slice(0,70)){
+      const div=document.createElement("div");
+      div.className="entry";
+      const top=document.createElement("div");
+      top.className="top";
+      const when=document.createElement("div");
+      when.className="when";
+      when.textContent=`Day ${l.day} • ${l.t}`;
+      const tag=document.createElement("div");
+      tag.className="tag "+kindTag(l.kind);
+      tag.textContent=l.kind.toUpperCase();
+      top.appendChild(when); top.appendChild(tag);
+      const msg=document.createElement("div");
+      msg.className="msg"; msg.textContent=l.msg;
+      div.appendChild(top); div.appendChild(msg);
+      logEl.appendChild(div);
+    }
+    if(scrollTop) logEl.scrollTop=0;
+
+    const list=el("techList");
+    list.innerHTML="";
+    for(const t of TECHS){
+      const unlocked=!!S.techUnlocked[t.id];
+      const can=canUnlock(t);
+      const div=document.createElement("div");
+      div.className="tech "+(unlocked?"unlocked":"");
+      const top=document.createElement("div");
+      top.className="top";
+      const left=document.createElement("div");
+      const name=document.createElement("div");
+      name.className="name"; name.textContent=t.name;
+      const desc=document.createElement("div");
+      desc.className="desc"; desc.textContent=t.desc;
+      left.appendChild(name); left.appendChild(desc);
+      const right=document.createElement("div");
+      right.style.textAlign="right";
+      const cost=document.createElement("div");
+      cost.className="cost"; cost.textContent=`Cost: ${t.cost} RP`;
+      right.appendChild(cost);
+      top.appendChild(left); top.appendChild(right);
+
+      const req=document.createElement("div");
+      req.className="req";
+      req.textContent=t.req.length?`前提：${t.req.map(id=>TECHS.find(x=>x.id===id)?.name||id).join(" / ")}`:"前提：なし";
+
+      const btns=document.createElement("div");
+      btns.className="btns";
+      const pill=document.createElement("span");
+      pill.className="pill";
+      pill.textContent = unlocked ? "🟢 解放済み" : (can ? "🟦 解放可能" : "⚪ 未解放");
+      btns.appendChild(pill);
+
+      const btn=document.createElement("button");
+      btn.textContent=unlocked?"解放済み":"解放する";
+      btn.disabled=unlocked||!can;
+      if(!btn.disabled) btn.classList.add("good");
+      btn.addEventListener("click", ()=>unlockTech(t.id));
+      btns.appendChild(btn);
+
+      div.appendChild(top); div.appendChild(req); div.appendChild(btns);
+      list.appendChild(div);
+    }
+
+    replaySlider.max = Math.max(0, S.history.length-1);
+    if(!replay.isActive){
+      replaySlider.value = Math.max(0, S.history.length-1);
+      el("replayMeta").textContent = `LIVE（履歴 ${S.history.length} 日分）`;
+    }else{
+      replaySlider.value = replay.sliderIndex;
+      const snap=S.history[replay.sliderIndex];
+      el("replayMeta").textContent = snap ? `Day ${snap.day} / ${replay.sliderIndex+1}/${S.history.length}` : "—";
+    }
+
+    if(!replay.isActive) setLiveHUD();
+  }
+
+  // ---------------- replay ----------------
+  const replay = { isActive:false, timer:null, sliderIndex:0, speedMs:260 };
+  function stopReplay(){ if(replay.timer) clearInterval(replay.timer); replay.timer=null; }
+
+  function applySceneFromSnapshot(snap){
+    if(!snap) return;
+    el("hudTitle").textContent="文明史ムービー（REPLAY）";
+    el("hudDay").textContent=`Day ${snap.day}`;
+    el("hudStats").textContent=`AI ${fmt(snap.ai)} / 研究 ${fmt(snap.research)} / 都市 ${fmt(snap.infra)}`;
+    el("hudSub").textContent=
+      (snap.flags?.length?`暦：${snap.flags.join(" / ")}`:"暦：通常日")+
+      `\n倍率×${(snap.mult??1).toFixed(2)}`+
+      (snap.caption?`\n\n${snap.caption}`:"");
+    window.__applySceneFromState({ ai:snap.ai, research:snap.research, infra:snap.infra, techUnlocked:snap.techUnlocked||{} });
+  }
+
+  replaySlider.addEventListener("input", ()=>{
+    if(S.history.length===0) return;
+    replay.isActive=true; stopReplay();
+    replay.sliderIndex=parseInt(replaySlider.value,10)||0;
+    render();
+    applySceneFromSnapshot(S.history[replay.sliderIndex]);
+  });
+
+  el("replayPlay").addEventListener("click", ()=>{
+    if(S.history.length===0) return;
+    replay.isActive=true; render();
+    stopReplay();
+    replay.timer=setInterval(()=>{
+      if(S.history.length===0) return;
+      if(replay.sliderIndex>=S.history.length) replay.sliderIndex=0;
+      applySceneFromSnapshot(S.history[replay.sliderIndex]);
+      replaySlider.value=String(replay.sliderIndex);
+      replay.sliderIndex++;
+    }, replay.speedMs);
+  });
+  el("replayPause").addEventListener("click", ()=>stopReplay());
+  el("replayLive").addEventListener("click", ()=>{
+    replay.isActive=false; stopReplay(); render();
+    window.__applySceneFromState(S);
+  });
+  el("replayClear").addEventListener("click", ()=>{
+    if(!confirm("履歴を削除しますか？")) return;
+    S.history=[]; snapshot("履歴再スタート。"); save(S);
+    replay.isActive=false; stopReplay(); render();
+    window.__applySceneFromState(S);
+  });
+
+  // ---------------- 擬似3D（Canvas2D） ----------------
+  const canvas = el("planetCanvas");
+  const wrap = el("canvasWrap");
+  const ctx = canvas.getContext("2d", { alpha:true });
+
+  let rot = 0;
+  let dragging=false, lastX=0;
+
+  const stars = Array.from({length:600}, ()=>({
+    x: Math.random(), y: Math.random(),
+    r: Math.random()*1.2 + 0.2,
+    a: Math.random()*0.6 + 0.2
+  }));
+
+  const citySeeds = Array.from({length:2400}, ()=>({
+    lat: rand(-Math.PI/2, Math.PI/2),
+    lon: rand(-Math.PI, Math.PI),
+    s: rand(0.6, 1.6)
+  }));
+
+  function project(lat, lon, R){
+    const L = lon + rot;
+    const x3 = Math.cos(lat)*Math.cos(L);
+    const y3 = Math.sin(lat);
+    const z3 = Math.cos(lat)*Math.sin(L);
+    const vis = z3 > 0;
+    const px = x3 * R;
+    const py = -y3 * R;
+    const depth = z3;
+    return {px, py, depth, vis};
+  }
+
+  let scene = { ai:1, research:0, infra:0, techUnlocked:{} };
+  window.__applySceneFromState = (st)=>{
+    scene.ai = st.ai ?? scene.ai;
+    scene.research = st.research ?? scene.research;
+    scene.infra = st.infra ?? scene.infra;
+    scene.techUnlocked = st.techUnlocked ?? scene.techUnlocked ?? {};
+  };
+  const hasTech=(id)=>!!scene.techUnlocked?.[id];
+
+  function resizeCanvas(){
+    const r = wrap.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.max(2, Math.floor(r.width*dpr));
+    canvas.height = Math.max(2, Math.floor(r.height*dpr));
+  }
+  window.addEventListener("resize", resizeCanvas);
+
+  canvas.addEventListener("pointerdown",(e)=>{
+    dragging=true; lastX=e.clientX;
+    canvas.setPointerCapture?.(e.pointerId);
+  });
+  window.addEventListener("pointerup",()=> dragging=false);
+  window.addEventListener("pointermove",(e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    rot += dx * 0.006;
+  });
+
+  function draw(){
+    requestAnimationFrame(draw);
+    rot += 0.0016;
+
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+
+    const bg = ctx.createRadialGradient(w*0.35, h*0.25, 10, w*0.5, h*0.6, Math.max(w,h));
+    bg.addColorStop(0, "rgba(96,165,250,0.08)");
+    bg.addColorStop(0.5, "rgba(52,211,153,0.05)");
+    bg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0,w,h);
+
+    ctx.save();
+    for(const s of stars){
+      const x = s.x*w, y=s.y*h;
+      ctx.globalAlpha = s.a;
+      ctx.fillStyle = "rgba(255,255,255,1)";
+      ctx.beginPath();
+      ctx.arc(x,y,s.r*(w/900),0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    const cx = w*0.5, cy = h*0.44;
+    const R = Math.min(w,h)*0.22;
+
+    const glowBoost = techEffectsFromState({techUnlocked:S.techUnlocked}).glowBoost;
+    const g = clamp(Math.log10(1+scene.research)*0.08 + glowBoost, 0.02, 0.35);
+
+    ctx.save();
+    const glow = ctx.createRadialGradient(cx,cy,R*0.75, cx,cy,R*1.8);
+    glow.addColorStop(0, `rgba(96,165,250,${0.22 + g})`);
+    glow.addColorStop(1, "rgba(96,165,250,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx,cy,R*1.7,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    const planet = ctx.createRadialGradient(cx - R*0.35, cy - R*0.25, R*0.2, cx, cy, R);
+    planet.addColorStop(0, "rgba(59,130,246,0.95)");
+    planet.addColorStop(0.6, "rgba(29,78,216,0.88)");
+    planet.addColorStop(1, "rgba(2,6,23,0.98)");
+    ctx.fillStyle = planet;
+    ctx.beginPath();
+    ctx.arc(cx,cy,R,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.15 + g*0.3;
+    ctx.strokeStyle = "rgba(96,165,250,1)";
+    ctx.lineWidth = Math.max(1, R*0.04);
+    ctx.beginPath(); ctx.arc(cx,cy,R*1.02,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+
+    const fxNow = techEffectsFromState({techUnlocked:scene.techUnlocked});
+    const baseCities = Math.floor(clamp(Math.log10(1+scene.infra)*300, 0, 2200));
+    const cityCount = Math.floor(clamp(baseCities*(1+fxNow.cityDensityBoost), 0, 2200));
+
+    ctx.save();
+    ctx.translate(cx,cy);
+    for(let i=0;i<cityCount;i++){
+      const c = citySeeds[i];
+      const p = project(c.lat, c.lon, R*1.01);
+      if(!p.vis) continue;
+      const size = (0.7 + p.depth*0.8) * c.s * (R/220);
+      const alpha = 0.22 + p.depth*0.65;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "rgba(52,211,153,1)";
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, size*3.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    if(hasTech("dyson_sphere")){
+      const buildP = clamp(Math.log10(1+scene.infra)/7.5, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = 0.10 + buildP*0.45;
+      ctx.strokeStyle = "rgba(251,191,36,1)";
+      ctx.lineWidth = Math.max(1, R*0.012);
+      for(let k=0;k<6;k++){
+        const t = k/5;
+        const ry = R*1.46*(0.55 + t*0.45);
+        const rx = R*1.46;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------------- init ----------------
+  function init(){
+    if(!Array.isArray(S.history)) S.history=[];
+    if(S.history.length===0){ snapshot("ゲーム開始。探索→研究→万倍日に増殖。"); save(S); }
+
+    render(true);
+    setLiveHUD();
+    resizeCanvas();
+    window.__applySceneFromState(S);
+    draw();
+  }
+
+  init();
+})();
+});
+</script>
+</body>
+</html>
